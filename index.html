@@ -1,0 +1,1379 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#101010" />
+  <title>Creative Flow — Canvas MVP</title>
+  <style>
+    :root{
+      --bg:#101010;
+      --canvas:#141414;
+      --panel:#181818;
+      --node:#1f1f1f;
+      --node-2:#242424;
+      --border:#363636;
+      --border-soft:#292929;
+      --text:#f2f2f2;
+      --muted:#9a9a9a;
+      --muted-2:#707070;
+      --accent:#d8c7a1;
+      --accent-soft:rgba(216,199,161,.12);
+      --danger:#e06b6b;
+      --line:#7a7a7a;
+      --cluster:rgba(216,199,161,.075);
+      --cluster-border:rgba(216,199,161,.48);
+      --safe-top:env(safe-area-inset-top, 0px);
+      --safe-bottom:env(safe-area-inset-bottom, 0px);
+      --topbar-h:58px;
+      --dock-h:76px;
+      --radius-xl:24px;
+      --radius-lg:18px;
+      --radius-md:14px;
+      --shadow:0 18px 60px rgba(0,0,0,.35);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    }
+
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text)}
+    body{position:fixed;inset:0;overscroll-behavior:none}
+    button,input,textarea,select{font:inherit}
+    button{border:0;cursor:pointer;color:inherit}
+
+    #app{position:fixed;inset:0;background:var(--bg);overflow:hidden}
+
+    .topbar{
+      position:absolute;left:0;right:0;top:0;height:calc(var(--topbar-h) + var(--safe-top));
+      padding:calc(10px + var(--safe-top)) 14px 8px;
+      display:flex;align-items:center;gap:10px;z-index:50;
+      background:linear-gradient(180deg,rgba(16,16,16,.98),rgba(16,16,16,.82) 70%,rgba(16,16,16,0));
+      user-select:none;
+    }
+    .topbar__back,.topbar__menu{
+      width:38px;height:38px;border-radius:14px;background:rgba(255,255,255,.055);
+      display:grid;place-items:center;border:1px solid rgba(255,255,255,.07);
+    }
+    .topbar__title{min-width:0;flex:1}
+    .topbar__title strong{display:block;font-size:15px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.01em}
+    .topbar__title span{display:block;color:var(--muted);font-size:12px;line-height:15px;margin-top:1px}
+    .modePill{
+      display:none;padding:8px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);
+      border:1px solid rgba(216,199,161,.25);font-size:12px;white-space:nowrap;
+    }
+    .modePill.active{display:block}
+
+    .screen{position:absolute;inset:0;display:none}
+    .screen.active{display:block}
+
+    /* Projects */
+    #projectsScreen{
+      padding:calc(72px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+      overflow:auto;
+    }
+    .heroTitle{font-size:30px;line-height:34px;margin:0 0 10px;letter-spacing:-.04em}
+    .heroSub{color:var(--muted);font-size:14px;line-height:20px;margin:0 0 22px;max-width:330px}
+    .projectList{display:flex;flex-direction:column;gap:12px}
+    .projectCard{
+      background:linear-gradient(180deg,#1b1b1b,#171717);
+      border:1px solid var(--border-soft);border-radius:22px;padding:16px;
+      box-shadow:0 10px 35px rgba(0,0,0,.18);
+    }
+    .projectCard h3{margin:0 0 6px;font-size:17px;letter-spacing:-.02em}
+    .projectCard p{margin:0 0 14px;color:var(--muted);font-size:13px;line-height:18px}
+    .projectMeta{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{font-size:12px;color:var(--muted);border:1px solid var(--border);background:rgba(255,255,255,.035);border-radius:999px;padding:6px 9px}
+    .primaryWide{
+      width:100%;height:54px;border-radius:18px;background:var(--accent);color:#16130c;
+      font-weight:700;margin:18px 0 0;
+    }
+
+    /* Canvas */
+    #canvasScreen{background:var(--canvas)}
+    #canvasViewport{
+      position:absolute;inset:0;overflow:hidden;touch-action:none;
+      background:
+        radial-gradient(circle at 50% 50%,rgba(255,255,255,.045) 1px,transparent 1.2px) 0 0/28px 28px,
+        linear-gradient(180deg,#121212,#151515 42%,#101010);
+    }
+    #canvas{
+      position:absolute;left:0;top:0;width:2600px;height:2600px;transform-origin:0 0;
+      will-change:transform;
+    }
+    #edgesLayer{
+      position:absolute;left:0;top:0;width:2600px;height:2600px;overflow:visible;z-index:1;pointer-events:none;
+    }
+    #clustersLayer{position:absolute;left:0;top:0;width:2600px;height:2600px;z-index:2;pointer-events:none}
+    #nodesLayer{position:absolute;left:0;top:0;width:2600px;height:2600px;z-index:3}
+
+    .node{
+      position:absolute;min-width:86px;max-width:190px;min-height:42px;
+      border-radius:15px;background:linear-gradient(180deg,var(--node-2),var(--node));
+      border:1px solid var(--border);box-shadow:0 10px 24px rgba(0,0,0,.23);
+      padding:10px 11px;touch-action:none;user-select:none;
+      display:flex;gap:8px;align-items:center;
+      transition:box-shadow .16s ease,border-color .16s ease,transform .16s ease,background .16s ease;
+    }
+    .node.selected,.node.linkSource,.node.clusterSelect{
+      border-color:var(--accent);box-shadow:0 0 0 4px rgba(216,199,161,.11),0 12px 26px rgba(0,0,0,.28);
+    }
+    .node.dragging{transition:none;box-shadow:0 18px 40px rgba(0,0,0,.45);z-index:10}
+    .node__icon{
+      width:22px;height:22px;border-radius:8px;background:rgba(216,199,161,.11);display:grid;place-items:center;
+      color:var(--accent);font-size:13px;flex:0 0 auto;overflow:hidden;
+    }
+    .node__body{min-width:0;flex:1}
+    .node__title{font-size:13px;line-height:16px;font-weight:680;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .node__meta{font-size:10px;line-height:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .node.imageNode{padding:6px;width:116px;display:block}
+    .node.imageNode img{width:100%;height:78px;object-fit:cover;border-radius:11px;display:block;background:#0c0c0c}
+    .node.imageNode .node__title{margin-top:6px;padding:0 4px}
+    .node.colorNode .node__icon{background:var(--swatch,#333);border:1px solid rgba(255,255,255,.18)}
+
+    .clusterBox{
+      position:absolute;border-radius:26px;background:var(--cluster);
+      border:1.5px solid var(--cluster-border);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);
+      padding:12px;pointer-events:auto;
+    }
+    .clusterBox.selected{border-color:var(--accent);background:rgba(216,199,161,.12);box-shadow:0 0 0 5px rgba(216,199,161,.08)}
+    .clusterLabel{
+      position:absolute;left:14px;top:-31px;background:rgba(20,20,20,.92);
+      border:1px solid rgba(216,199,161,.25);color:var(--accent);
+      border-radius:999px;padding:6px 10px;font-size:12px;font-weight:680;white-space:nowrap;
+      max-width:230px;overflow:hidden;text-overflow:ellipsis;
+      backdrop-filter:blur(10px);
+    }
+
+    .edgeLine{stroke:var(--line);stroke-width:2;opacity:.82}
+    .edgeLabel{fill:var(--muted);font-size:22px;paint-order:stroke;stroke:#141414;stroke-width:8;stroke-linejoin:round}
+    .edgeLine.supports{stroke:var(--accent)}
+    .edgeLine.contrasts{stroke:#b3b3b3;stroke-dasharray:9 8}
+    .edgeLine.leads{stroke:#9ba9ad}
+
+    .bottomDock{
+      position:absolute;left:12px;right:12px;bottom:calc(10px + var(--safe-bottom));
+      min-height:64px;z-index:55;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;
+      background:rgba(18,18,18,.82);border:1px solid rgba(255,255,255,.08);
+      border-radius:24px;padding:8px;box-shadow:var(--shadow);backdrop-filter:blur(20px);
+    }
+    .dockBtn{
+      border-radius:18px;background:rgba(255,255,255,.055);color:var(--text);font-size:12px;font-weight:650;
+      min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    }
+    .dockBtn strong{font-size:18px;line-height:18px}
+    .dockBtn.active{background:var(--accent);color:#16130c}
+    .dockBtn.danger{color:var(--danger)}
+
+    .floatingTool{
+      position:absolute;right:14px;bottom:calc(86px + var(--safe-bottom));
+      z-index:52;display:flex;flex-direction:column;gap:8px;
+    }
+    .roundBtn{
+      width:44px;height:44px;border-radius:16px;background:rgba(24,24,24,.86);
+      color:var(--text);border:1px solid rgba(255,255,255,.08);box-shadow:0 10px 30px rgba(0,0,0,.3);
+      backdrop-filter:blur(12px);
+    }
+
+    /* Panels */
+    .overlay{
+      position:absolute;inset:0;background:rgba(0,0,0,.42);z-index:80;display:none;
+    }
+    .overlay.active{display:block}
+    .bottomSheet{
+      position:absolute;left:0;right:0;bottom:0;z-index:90;
+      background:linear-gradient(180deg,#1d1d1d,#151515);
+      border-top:1px solid rgba(255,255,255,.09);
+      border-radius:28px 28px 0 0;
+      padding:10px 16px calc(16px + var(--safe-bottom));
+      box-shadow:0 -22px 70px rgba(0,0,0,.52);
+      transform:translateY(110%);
+      transition:transform .22s ease;
+      max-height:86dvh;overflow:auto;
+    }
+    .bottomSheet.active{transform:translateY(0)}
+    .sheetGrab{width:42px;height:4px;border-radius:999px;background:#454545;margin:0 auto 14px}
+    .sheetTitle{margin:0 0 4px;font-size:20px;letter-spacing:-.03em}
+    .sheetText{margin:0 0 16px;color:var(--muted);font-size:13px;line-height:19px}
+    .row{display:flex;gap:10px;align-items:center}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .optionBtn{
+      min-height:58px;text-align:left;border-radius:18px;background:rgba(255,255,255,.055);
+      border:1px solid rgba(255,255,255,.075);padding:12px;
+    }
+    .optionBtn b{display:block;font-size:14px;margin-bottom:4px}
+    .optionBtn span{display:block;color:var(--muted);font-size:12px;line-height:15px}
+    .field{margin:12px 0}
+    .label{display:block;color:var(--muted);font-size:12px;margin:0 0 7px}
+    input,textarea,select{
+      width:100%;background:#101010;color:var(--text);border:1px solid var(--border);
+      border-radius:16px;padding:13px 14px;outline:none;
+    }
+    textarea{min-height:110px;resize:vertical}
+    input:focus,textarea:focus,select:focus{border-color:rgba(216,199,161,.68);box-shadow:0 0 0 4px rgba(216,199,161,.08)}
+    .primaryBtn,.secondaryBtn,.ghostBtn{
+      height:50px;border-radius:17px;font-weight:750;
+    }
+    .primaryBtn{background:var(--accent);color:#17130c}
+    .secondaryBtn{background:rgba(255,255,255,.07);color:var(--text);border:1px solid rgba(255,255,255,.08)}
+    .ghostBtn{background:transparent;color:var(--muted)}
+    .dangerBtn{background:rgba(224,107,107,.12);color:#ffb0b0;border:1px solid rgba(224,107,107,.2)}
+
+    .toast{
+      position:absolute;left:50%;bottom:calc(92px + var(--safe-bottom));z-index:120;
+      transform:translate(-50%,20px);opacity:0;pointer-events:none;
+      background:rgba(242,242,242,.92);color:#101010;border-radius:999px;padding:10px 14px;
+      font-size:13px;font-weight:720;transition:.22s ease;box-shadow:0 18px 45px rgba(0,0,0,.25);
+    }
+    .toast.show{opacity:1;transform:translate(-50%,0)}
+
+    .viewPanel{
+      position:absolute;inset:0;z-index:70;background:var(--bg);display:none;
+      padding:calc(72px + var(--safe-top)) 16px calc(92px + var(--safe-bottom));overflow:auto;
+    }
+    .viewPanel.active{display:block}
+    .panelHeader h2{margin:0 0 6px;font-size:26px;letter-spacing:-.04em}
+    .panelHeader p{margin:0 0 20px;color:var(--muted);font-size:14px;line-height:20px}
+    .visionCanvas{
+      position:relative;width:100%;height:410px;border-radius:28px;overflow:hidden;background:#141414;
+      border:1px solid var(--border-soft);margin:18px 0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.02);
+    }
+    .emptyBlock{
+      border:1px dashed var(--border);border-radius:22px;padding:18px;color:var(--muted);line-height:20px;background:rgba(255,255,255,.025);
+    }
+    .taskItem,.passItem{
+      border:1px solid var(--border-soft);border-radius:18px;padding:14px;margin:10px 0;background:#181818;
+    }
+    .taskItem.done{opacity:.55;text-decoration:line-through}
+
+    @media (min-width: 720px){
+      #app{max-width:430px;max-height:932px;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:32px;overflow:hidden;border:1px solid #2a2a2a;box-shadow:0 30px 100px rgba(0,0,0,.55)}
+      body{background:#080808}
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <section id="projectsScreen" class="screen active">
+      <h1 class="heroTitle">Creative Flow</h1>
+      <p class="heroSub">Мобільне полотно для творчого мислення: вузли, зв’язки, кластери й зафіксоване бачення.</p>
+      <div id="projectList" class="projectList"></div>
+      <button id="newProjectBtn" class="primaryWide">Новий проєкт</button>
+    </section>
+
+    <section id="canvasScreen" class="screen">
+      <header class="topbar">
+        <button id="backToProjectsBtn" class="topbar__back" aria-label="Назад">←</button>
+        <div class="topbar__title">
+          <strong id="projectTitle">Project</strong>
+          <span id="projectSubtitle">Canvas · 100%</span>
+        </div>
+        <div id="modePill" class="modePill">Mode</div>
+        <button id="menuBtn" class="topbar__menu" aria-label="Меню">⋯</button>
+      </header>
+
+      <main id="canvasViewport">
+        <div id="canvas">
+          <svg id="edgesLayer">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#7a7a7a"></path>
+              </marker>
+            </defs>
+          </svg>
+          <div id="clustersLayer"></div>
+          <div id="nodesLayer"></div>
+        </div>
+      </main>
+
+      <div class="floatingTool">
+        <button id="centerBtn" class="roundBtn" aria-label="Center">⌖</button>
+        <button id="visionBtn" class="roundBtn" aria-label="Vision">◎</button>
+        <button id="makeBtn" class="roundBtn" aria-label="Make">↳</button>
+      </div>
+
+      <nav class="bottomDock">
+        <button class="dockBtn" data-action="add"><strong>+</strong><span>Node</span></button>
+        <button class="dockBtn" data-action="link"><strong>↔</strong><span>Link</span></button>
+        <button class="dockBtn" data-action="cluster"><strong>□</strong><span>Cluster</span></button>
+        <button class="dockBtn" data-action="lock"><strong>◆</strong><span>Lock</span></button>
+      </nav>
+    </section>
+
+    <section id="visionPanel" class="viewPanel">
+      <div class="panelHeader">
+        <h2>Locked Vision</h2>
+        <p id="visionDescription">Зафіксована карта з’явиться після Lock.</p>
+      </div>
+      <div id="visionContent"></div>
+      <button id="closeVisionBtn" class="secondaryBtn" style="width:100%">Назад до Canvas</button>
+    </section>
+
+    <section id="makePanel" class="viewPanel">
+      <div class="panelHeader">
+        <h2>Make</h2>
+        <p>Робочий простір після фіксації бачення. Мінімальна версія: проходи роботи, review-нотатки й задачі.</p>
+      </div>
+      <div class="grid2" style="margin-bottom:14px">
+        <button id="addPassBtn" class="primaryBtn">Create pass</button>
+        <button id="addReviewBtn" class="secondaryBtn">Review note</button>
+      </div>
+      <div id="makeContent"></div>
+      <button id="closeMakeBtn" class="secondaryBtn" style="width:100%;margin-top:12px">Назад до Canvas</button>
+    </section>
+
+    <div id="overlay" class="overlay"></div>
+    <div id="bottomSheet" class="bottomSheet"></div>
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "creative_flow_canvas_mvp_v1";
+
+    const defaultState = {
+      currentProjectId: null,
+      projects: [],
+      nodes: [],
+      edges: [],
+      clusters: [],
+      lockedVisions: [],
+      workPasses: [],
+      reviewNotes: [],
+      tasks: [],
+      viewport: { x: -620, y: -620, zoom: 0.82 }
+    };
+
+    let state = loadState();
+    let ui = {
+      screen: "projects",
+      mode: "idle",
+      selectedNodeId: null,
+      selectedClusterId: null,
+      linkSourceId: null,
+      clusterSelection: new Set(),
+      pan: { active:false, startX:0, startY:0, baseX:0, baseY:0 },
+      drag: { active:false, nodeId:null, startX:0, startY:0, nodeX:0, nodeY:0, moved:false },
+      pinch: { active:false, startDistance:0, startZoom:1, centerX:0, centerY:0 },
+      lastTapNodeId: null
+    };
+
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    const uid = (prefix) => `${prefix}_${Math.random().toString(36).slice(2,9)}_${Date.now().toString(36).slice(-4)}`;
+
+    const els = {
+      projectsScreen: $("#projectsScreen"),
+      canvasScreen: $("#canvasScreen"),
+      projectList: $("#projectList"),
+      newProjectBtn: $("#newProjectBtn"),
+      backToProjectsBtn: $("#backToProjectsBtn"),
+      projectTitle: $("#projectTitle"),
+      projectSubtitle: $("#projectSubtitle"),
+      modePill: $("#modePill"),
+      menuBtn: $("#menuBtn"),
+      canvasViewport: $("#canvasViewport"),
+      canvas: $("#canvas"),
+      edgesLayer: $("#edgesLayer"),
+      nodesLayer: $("#nodesLayer"),
+      clustersLayer: $("#clustersLayer"),
+      bottomSheet: $("#bottomSheet"),
+      overlay: $("#overlay"),
+      toast: $("#toast"),
+      centerBtn: $("#centerBtn"),
+      visionBtn: $("#visionBtn"),
+      makeBtn: $("#makeBtn"),
+      visionPanel: $("#visionPanel"),
+      visionContent: $("#visionContent"),
+      visionDescription: $("#visionDescription"),
+      closeVisionBtn: $("#closeVisionBtn"),
+      makePanel: $("#makePanel"),
+      makeContent: $("#makeContent"),
+      closeMakeBtn: $("#closeMakeBtn"),
+      addPassBtn: $("#addPassBtn"),
+      addReviewBtn: $("#addReviewBtn")
+    };
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return structuredClone(defaultState);
+        const parsed = JSON.parse(raw);
+        return {...structuredClone(defaultState), ...parsed, viewport:{...defaultState.viewport, ...(parsed.viewport||{})}};
+      }catch(err){
+        console.warn("Failed to load state", err);
+        return structuredClone(defaultState);
+      }
+    }
+
+    function saveState(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function currentProject(){
+      return state.projects.find(p => p.id === state.currentProjectId) || null;
+    }
+
+    function currentNodes(){
+      return state.nodes.filter(n => n.projectId === state.currentProjectId);
+    }
+
+    function currentEdges(){
+      return state.edges.filter(e => e.projectId === state.currentProjectId);
+    }
+
+    function currentClusters(){
+      return state.clusters.filter(c => c.projectId === state.currentProjectId);
+    }
+
+    function setScreen(name){
+      ui.screen = name;
+      els.projectsScreen.classList.toggle("active", name === "projects");
+      els.canvasScreen.classList.toggle("active", name === "canvas");
+      els.visionPanel.classList.remove("active");
+      els.makePanel.classList.remove("active");
+      renderAll();
+    }
+
+    function openPanel(name){
+      if(name === "vision"){
+        renderVisionPanel();
+        els.visionPanel.classList.add("active");
+      }
+      if(name === "make"){
+        renderMakePanel();
+        els.makePanel.classList.add("active");
+      }
+    }
+
+    function closePanels(){
+      els.visionPanel.classList.remove("active");
+      els.makePanel.classList.remove("active");
+    }
+
+    function toast(text){
+      els.toast.textContent = text;
+      els.toast.classList.add("show");
+      setTimeout(()=>els.toast.classList.remove("show"), 1700);
+    }
+
+    function showSheet(html){
+      els.overlay.classList.add("active");
+      els.bottomSheet.innerHTML = `<div class="sheetGrab"></div>${html}`;
+      els.bottomSheet.classList.add("active");
+    }
+
+    function closeSheet(){
+      els.overlay.classList.remove("active");
+      els.bottomSheet.classList.remove("active");
+      setTimeout(()=>{ els.bottomSheet.innerHTML = ""; }, 180);
+    }
+
+    function canvasPointFromClient(clientX, clientY){
+      const rect = els.canvasViewport.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left - state.viewport.x) / state.viewport.zoom,
+        y: (clientY - rect.top - state.viewport.y) / state.viewport.zoom
+      };
+    }
+
+    function clientPointFromCanvas(x,y){
+      const rect = els.canvasViewport.getBoundingClientRect();
+      return {
+        x: rect.left + state.viewport.x + x * state.viewport.zoom,
+        y: rect.top + state.viewport.y + y * state.viewport.zoom
+      };
+    }
+
+    function getViewportCenterCanvasPoint(){
+      const rect = els.canvasViewport.getBoundingClientRect();
+      return {
+        x: (rect.width / 2 - state.viewport.x) / state.viewport.zoom,
+        y: (rect.height / 2 - state.viewport.y) / state.viewport.zoom
+      };
+    }
+
+    function applyViewport(){
+      els.canvas.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.zoom})`;
+      const p = currentProject();
+      els.projectSubtitle.textContent = p ? `Canvas · ${Math.round(state.viewport.zoom*100)}%` : "";
+    }
+
+    function setMode(mode){
+      ui.mode = mode;
+      ui.linkSourceId = null;
+      ui.clusterSelection.clear();
+      ui.selectedNodeId = null;
+      if(mode !== "idle") ui.selectedClusterId = null;
+      $$(".dockBtn").forEach(btn => btn.classList.toggle("active", btn.dataset.action === mode));
+      const label = {
+        idle: "",
+        add: "",
+        link: "Link: tap 2 вузли",
+        cluster: "Cluster: вибери вузли",
+        lock: "Lock: вибери кластер"
+      }[mode] || "";
+      els.modePill.textContent = label;
+      els.modePill.classList.toggle("active", Boolean(label));
+      renderAll();
+    }
+
+    function iconForType(type){
+      return ({text:"T", image:"◧", link:"↗", color:"■", quote:"“"})[type] || "•";
+    }
+
+    function renderAll(){
+      renderProjects();
+      renderCanvas();
+      updateTopbar();
+      saveState();
+    }
+
+    function renderProjects(){
+      if(!els.projectList) return;
+      if(!state.projects.length){
+        els.projectList.innerHTML = `<div class="emptyBlock">Поки немає проєктів. Створи перший canvas і перевір ядро продукту.</div>`;
+        return;
+      }
+      els.projectList.innerHTML = state.projects.map(project => {
+        const nodes = state.nodes.filter(n=>n.projectId===project.id).length;
+        const clusters = state.clusters.filter(c=>c.projectId===project.id).length;
+        const locked = state.lockedVisions.some(v=>v.projectId===project.id);
+        return `
+          <button class="projectCard" data-open-project="${project.id}">
+            <h3>${escapeHtml(project.title)}</h3>
+            <p>${escapeHtml(project.description || "Canvas-first creative project")}</p>
+            <div class="projectMeta">
+              <span class="chip">${nodes} nodes</span>
+              <span class="chip">${clusters} clusters</span>
+              <span class="chip">${locked ? "Vision locked" : "No vision"}</span>
+            </div>
+          </button>
+        `;
+      }).join("");
+      $$("[data-open-project]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.currentProjectId = btn.dataset.openProject;
+          setScreen("canvas");
+          centerCanvas(false);
+        });
+      });
+    }
+
+    function updateTopbar(){
+      const p = currentProject();
+      if(!p) return;
+      els.projectTitle.textContent = p.title;
+      els.projectSubtitle.textContent = `Canvas · ${Math.round(state.viewport.zoom*100)}%`;
+    }
+
+    function renderCanvas(){
+      if(ui.screen !== "canvas" && !els.canvasScreen.classList.contains("active")) return;
+      applyViewport();
+      renderClusters();
+      renderEdges();
+      renderNodes();
+    }
+
+    function renderNodes(){
+      const nodes = currentNodes();
+      els.nodesLayer.innerHTML = nodes.map(node => {
+        const selected = ui.selectedNodeId === node.id || ui.linkSourceId === node.id || ui.clusterSelection.has(node.id);
+        const classes = [
+          "node",
+          node.type === "image" ? "imageNode" : "",
+          node.type === "color" ? "colorNode" : "",
+          selected ? (ui.linkSourceId === node.id ? "linkSource" : ui.clusterSelection.has(node.id) ? "clusterSelect" : "selected") : ""
+        ].filter(Boolean).join(" ");
+        const style = `left:${node.x}px;top:${node.y}px;${node.type==="color" ? `--swatch:${escapeAttr(node.content || "#333")}` : ""}`;
+        if(node.type === "image"){
+          return `<div class="${classes}" data-node-id="${node.id}" style="${style}">
+            ${node.content ? `<img src="${escapeAttr(node.content)}" alt="">` : ""}
+            <div class="node__title">${escapeHtml(node.title || "Image")}</div>
+          </div>`;
+        }
+        return `<div class="${classes}" data-node-id="${node.id}" style="${style}">
+          <div class="node__icon">${iconForType(node.type)}</div>
+          <div class="node__body">
+            <div class="node__title">${escapeHtml(node.title || node.content || "Node")}</div>
+            <div class="node__meta">${escapeHtml(metaForNode(node))}</div>
+          </div>
+        </div>`;
+      }).join("");
+
+      $$("[data-node-id]").forEach(el => {
+        el.addEventListener("pointerdown", onNodePointerDown);
+      });
+    }
+
+    function metaForNode(node){
+      if(node.type === "link") return node.content || "link";
+      if(node.type === "color") return node.content || "color";
+      if(node.type === "quote") return "quote";
+      if(node.type === "image") return "image";
+      return node.content && node.content !== node.title ? node.content : "text";
+    }
+
+    function nodeCenter(node){
+      const el = document.querySelector(`[data-node-id="${node.id}"]`);
+      const fallbackW = node.type === "image" ? 116 : 110;
+      const fallbackH = node.type === "image" ? 112 : 50;
+      return {
+        x: node.x + (el ? el.offsetWidth / 2 : fallbackW / 2),
+        y: node.y + (el ? el.offsetHeight / 2 : fallbackH / 2)
+      };
+    }
+
+    function renderEdges(){
+      const nodes = currentNodes();
+      const nodeMap = Object.fromEntries(nodes.map(n=>[n.id,n]));
+      const edges = currentEdges().filter(e => nodeMap[e.sourceNodeId] && nodeMap[e.targetNodeId]);
+      const lines = edges.map(edge => {
+        const a = nodeCenter(nodeMap[edge.sourceNodeId]);
+        const b = nodeCenter(nodeMap[edge.targetNodeId]);
+        const midX = (a.x+b.x)/2;
+        const midY = (a.y+b.y)/2;
+        const label = ({supports:"підтримує", contrasts:"контрастує", leads:"веде до"})[edge.type] || edge.type;
+        const cls = edge.type === "supports" ? "supports" : edge.type === "contrasts" ? "contrasts" : "leads";
+        return `
+          <line class="edgeLine ${cls}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" marker-end="url(#arrow)" />
+          <text class="edgeLabel" x="${midX}" y="${midY - 8}" text-anchor="middle">${escapeHtml(label)}</text>
+        `;
+      }).join("");
+      els.edgesLayer.innerHTML = `<defs>
+        <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#7a7a7a"></path>
+        </marker>
+      </defs>${lines}`;
+    }
+
+    function clusterBounds(cluster){
+      const nodeMap = Object.fromEntries(currentNodes().map(n=>[n.id,n]));
+      const nodes = cluster.nodeIds.map(id=>nodeMap[id]).filter(Boolean);
+      if(!nodes.length) return {x:0,y:0,w:0,h:0};
+      const boxes = nodes.map(n => {
+        const el = document.querySelector(`[data-node-id="${n.id}"]`);
+        const w = el ? el.offsetWidth : (n.type === "image" ? 116 : 110);
+        const h = el ? el.offsetHeight : (n.type === "image" ? 112 : 50);
+        return {x:n.x,y:n.y,w,h};
+      });
+      const minX = Math.min(...boxes.map(b=>b.x));
+      const minY = Math.min(...boxes.map(b=>b.y));
+      const maxX = Math.max(...boxes.map(b=>b.x+b.w));
+      const maxY = Math.max(...boxes.map(b=>b.y+b.h));
+      const pad = 32;
+      return {x:minX-pad,y:minY-pad,w:maxX-minX+pad*2,h:maxY-minY+pad*2};
+    }
+
+    function renderClusters(){
+      els.clustersLayer.innerHTML = currentClusters().map(cluster => {
+        const b = clusterBounds(cluster);
+        if(!b.w) return "";
+        const selected = ui.selectedClusterId === cluster.id;
+        return `<div class="clusterBox ${selected ? "selected" : ""}" data-cluster-id="${cluster.id}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px">
+          <div class="clusterLabel">${escapeHtml(cluster.title)}</div>
+        </div>`;
+      }).join("");
+      $$("[data-cluster-id]").forEach(el => {
+        el.addEventListener("pointerdown", (e)=>{
+          e.stopPropagation();
+          ui.selectedClusterId = el.dataset.clusterId;
+          ui.selectedNodeId = null;
+          if(ui.mode === "lock") openLockSheet(ui.selectedClusterId);
+          else renderAll();
+        });
+      });
+    }
+
+    function onNodePointerDown(e){
+      e.stopPropagation();
+      const nodeId = e.currentTarget.dataset.nodeId;
+
+      if(ui.mode === "link"){
+        handleLinkTap(nodeId);
+        return;
+      }
+      if(ui.mode === "cluster"){
+        if(ui.clusterSelection.has(nodeId)) ui.clusterSelection.delete(nodeId);
+        else ui.clusterSelection.add(nodeId);
+        ui.selectedNodeId = null;
+        renderAll();
+        if(ui.clusterSelection.size >= 2) showClusterActionHint();
+        return;
+      }
+
+      ui.drag = {
+        active:true,
+        nodeId,
+        startX:e.clientX,
+        startY:e.clientY,
+        nodeX: state.nodes.find(n=>n.id===nodeId)?.x || 0,
+        nodeY: state.nodes.find(n=>n.id===nodeId)?.y || 0,
+        moved:false
+      };
+      ui.selectedNodeId = nodeId;
+      ui.selectedClusterId = null;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.currentTarget.classList.add("dragging");
+      renderAll();
+    }
+
+    function onNodePointerMove(e){
+      if(!ui.drag.active) return;
+      const dx = (e.clientX - ui.drag.startX) / state.viewport.zoom;
+      const dy = (e.clientY - ui.drag.startY) / state.viewport.zoom;
+      if(Math.abs(dx) + Math.abs(dy) > 3) ui.drag.moved = true;
+      const node = state.nodes.find(n=>n.id===ui.drag.nodeId);
+      if(node){
+        node.x = Math.round(ui.drag.nodeX + dx);
+        node.y = Math.round(ui.drag.nodeY + dy);
+        node.updatedAt = new Date().toISOString();
+        renderCanvas();
+      }
+    }
+
+    function onNodePointerUp(e){
+      if(!ui.drag.active) return;
+      const nodeId = ui.drag.nodeId;
+      const moved = ui.drag.moved;
+      ui.drag.active = false;
+      ui.drag.nodeId = null;
+      $$(".node.dragging").forEach(n=>n.classList.remove("dragging"));
+      saveState();
+      if(!moved){
+        openNodeSheet(nodeId);
+      }
+    }
+
+    function handleLinkTap(nodeId){
+      if(!ui.linkSourceId){
+        ui.linkSourceId = nodeId;
+        toast("Обери другий вузол");
+        renderAll();
+        return;
+      }
+      if(ui.linkSourceId === nodeId){
+        ui.linkSourceId = null;
+        renderAll();
+        return;
+      }
+      openRelationSheet(ui.linkSourceId, nodeId);
+    }
+
+    function showClusterActionHint(){
+      showSheet(`
+        <h2 class="sheetTitle">Cluster</h2>
+        <p class="sheetText">Вибрано ${ui.clusterSelection.size} вузли. Створи з них творчий напрям.</p>
+        <button id="createClusterNow" class="primaryBtn" style="width:100%">Створити Cluster</button>
+        <button id="cancelClusterMode" class="ghostBtn" style="width:100%;margin-top:8px">Скасувати</button>
+      `);
+      $("#createClusterNow").onclick = () => openCreateClusterSheet();
+      $("#cancelClusterMode").onclick = () => { closeSheet(); setMode("idle"); };
+    }
+
+    function openAddSheet(){
+      showSheet(`
+        <h2 class="sheetTitle">Add node</h2>
+        <p class="sheetText">Додай думку, референс або матеріал прямо на canvas.</p>
+        <div class="grid2">
+          <button class="optionBtn" data-node-type="text"><b>Text</b><span>коротка думка</span></button>
+          <button class="optionBtn" data-node-type="quote"><b>Quote</b><span>фраза / інсайт</span></button>
+          <button class="optionBtn" data-node-type="link"><b>Link</b><span>посилання</span></button>
+          <button class="optionBtn" data-node-type="color"><b>Color</b><span>#HEX колір</span></button>
+          <button class="optionBtn" data-node-type="image"><b>Image</b><span>фото / скрін</span></button>
+        </div>
+      `);
+      $$("[data-node-type]").forEach(btn => btn.onclick = () => openNodeForm(btn.dataset.nodeType));
+    }
+
+    function openNodeForm(type, existingId = null){
+      const existing = existingId ? state.nodes.find(n=>n.id===existingId) : null;
+      const typeTitle = {text:"Text node", quote:"Quote node", link:"Link node", color:"Color node", image:"Image node"}[type] || "Node";
+      let extra = "";
+      if(type === "image"){
+        extra = `
+          <div class="field">
+            <label class="label">Image file</label>
+            <input id="nodeImageFile" type="file" accept="image/*" />
+          </div>
+          <p class="sheetText">Для першого прототипу зображення зберігається в браузері. Великі фото краще стискати.</p>
+        `;
+      }
+      showSheet(`
+        <h2 class="sheetTitle">${existing ? "Edit" : "New"} ${typeTitle}</h2>
+        <div class="field">
+          <label class="label">Title</label>
+          <input id="nodeTitleInput" value="${escapeAttr(existing?.title || "")}" placeholder="Наприклад: Raw texture" />
+        </div>
+        <div class="field">
+          <label class="label">${type === "link" ? "URL" : type === "color" ? "HEX" : "Content"}</label>
+          ${type === "quote" || type === "text" ? `<textarea id="nodeContentInput" placeholder="Коротка думка...">${escapeHtml(existing?.content || "")}</textarea>` : `<input id="nodeContentInput" value="${escapeAttr(existing?.content || (type==="color" ? "#d8c7a1" : ""))}" placeholder="${type === "link" ? "https://..." : "#d8c7a1"}" />`}
+        </div>
+        ${extra}
+        <div class="row">
+          <button id="saveNodeBtn" class="primaryBtn" style="flex:1">${existing ? "Зберегти" : "Add to Canvas"}</button>
+          <button id="cancelNodeBtn" class="secondaryBtn" style="width:110px">Cancel</button>
+        </div>
+      `);
+      $("#cancelNodeBtn").onclick = closeSheet;
+      $("#saveNodeBtn").onclick = async () => {
+        const title = $("#nodeTitleInput").value.trim();
+        let content = $("#nodeContentInput").value.trim();
+        if(type === "image"){
+          const file = $("#nodeImageFile")?.files?.[0];
+          if(file) content = await fileToDataURL(file);
+          if(!content && !existing?.content){
+            toast("Додай image file");
+            return;
+          }
+        }
+        if(type !== "image" && !title && !content){
+          toast("Додай текст");
+          return;
+        }
+        if(existing){
+          existing.title = title || fallbackTitle(type, content);
+          existing.content = content || existing.content;
+          existing.updatedAt = new Date().toISOString();
+        }else{
+          const center = getViewportCenterCanvasPoint();
+          const jitter = currentNodes().length * 12;
+          state.nodes.push({
+            id: uid("node"),
+            projectId: state.currentProjectId,
+            type,
+            title: title || fallbackTitle(type, content),
+            content,
+            x: Math.round(center.x - 55 + jitter),
+            y: Math.round(center.y - 25 + jitter),
+            clusterId: null,
+            createdAt: new Date().toISOString()
+          });
+        }
+        closeSheet();
+        setMode("idle");
+        renderAll();
+        toast(existing ? "Вузол оновлено" : "Вузол додано");
+      };
+    }
+
+    function fallbackTitle(type, content){
+      if(type === "link"){
+        try { return new URL(content).hostname.replace("www.",""); } catch { return "Link"; }
+      }
+      if(type === "color") return content || "Color";
+      if(type === "image") return "Image";
+      if(type === "quote") return content ? content.slice(0,42) : "Quote";
+      return content ? content.slice(0,42) : "Text";
+    }
+
+    function fileToDataURL(file){
+      return new Promise((resolve,reject)=>{
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function openNodeSheet(nodeId){
+      const node = state.nodes.find(n=>n.id===nodeId);
+      if(!node) return;
+      const linked = currentEdges().filter(e=>e.sourceNodeId===node.id || e.targetNodeId===node.id);
+      const cluster = currentClusters().find(c=>c.nodeIds.includes(node.id));
+      showSheet(`
+        <h2 class="sheetTitle">${escapeHtml(node.title || "Node")}</h2>
+        <p class="sheetText">${escapeHtml(metaForNode(node))}</p>
+        ${node.type === "image" && node.content ? `<img src="${escapeAttr(node.content)}" style="width:100%;max-height:260px;object-fit:cover;border-radius:20px;margin-bottom:12px" alt="">` : ""}
+        <div class="projectMeta" style="margin-bottom:14px">
+          <span class="chip">${escapeHtml(node.type)}</span>
+          <span class="chip">${linked.length} links</span>
+          ${cluster ? `<span class="chip">${escapeHtml(cluster.title)}</span>` : ""}
+        </div>
+        ${node.content && node.type !== "image" ? `<div class="emptyBlock" style="margin-bottom:12px">${escapeHtml(node.content)}</div>` : ""}
+        <div class="grid2">
+          <button id="editNodeBtn" class="secondaryBtn">Edit</button>
+          <button id="connectFromNodeBtn" class="secondaryBtn">Connect</button>
+        </div>
+        <button id="deleteNodeBtn" class="secondaryBtn dangerBtn" style="width:100%;margin-top:10px">Delete node</button>
+      `);
+      $("#editNodeBtn").onclick = () => openNodeForm(node.type, node.id);
+      $("#connectFromNodeBtn").onclick = () => {
+        closeSheet();
+        setMode("link");
+        ui.linkSourceId = node.id;
+        renderAll();
+        toast("Обери другий вузол");
+      };
+      $("#deleteNodeBtn").onclick = () => {
+        state.nodes = state.nodes.filter(n=>n.id!==node.id);
+        state.edges = state.edges.filter(e=>e.sourceNodeId!==node.id && e.targetNodeId!==node.id);
+        state.clusters.forEach(c => c.nodeIds = c.nodeIds.filter(id=>id!==node.id));
+        closeSheet();
+        renderAll();
+        toast("Вузол видалено");
+      };
+    }
+
+    function openRelationSheet(sourceId, targetId){
+      const source = state.nodes.find(n=>n.id===sourceId);
+      const target = state.nodes.find(n=>n.id===targetId);
+      showSheet(`
+        <h2 class="sheetTitle">Relation</h2>
+        <p class="sheetText">${escapeHtml(source?.title || "A")} → ${escapeHtml(target?.title || "B")}</p>
+        <div class="grid2">
+          <button class="optionBtn" data-relation="supports"><b>підтримує</b><span>підсилює напрям</span></button>
+          <button class="optionBtn" data-relation="contrasts"><b>контрастує</b><span>створює напругу</span></button>
+          <button class="optionBtn" data-relation="leads"><b>веде до</b><span>переходить у думку</span></button>
+        </div>
+      `);
+      $$("[data-relation]").forEach(btn => btn.onclick = () => {
+        const exists = state.edges.some(e => e.projectId===state.currentProjectId && e.sourceNodeId===sourceId && e.targetNodeId===targetId);
+        if(!exists){
+          state.edges.push({
+            id: uid("edge"),
+            projectId: state.currentProjectId,
+            sourceNodeId: sourceId,
+            targetNodeId: targetId,
+            type: btn.dataset.relation,
+            createdAt: new Date().toISOString()
+          });
+        }
+        closeSheet();
+        setMode("idle");
+        toast("Зв’язок створено");
+      });
+    }
+
+    function openCreateClusterSheet(){
+      showSheet(`
+        <h2 class="sheetTitle">New cluster</h2>
+        <p class="sheetText">Cluster — це напрям, а не папка. Назви його як можливу концепцію.</p>
+        <div class="field">
+          <label class="label">Name</label>
+          <input id="clusterNameInput" placeholder="Raw / Dark / Architectural" />
+        </div>
+        <div class="field">
+          <label class="label">Mood words</label>
+          <input id="clusterMoodInput" placeholder="raw, dark, solid" />
+        </div>
+        <div class="field">
+          <label class="label">Description</label>
+          <textarea id="clusterDescInput" placeholder="Коротко опиши характер напряму"></textarea>
+        </div>
+        <button id="saveClusterBtn" class="primaryBtn" style="width:100%">Create Cluster</button>
+      `);
+      $("#saveClusterBtn").onclick = () => {
+        const name = $("#clusterNameInput").value.trim();
+        if(!name){
+          toast("Назви cluster");
+          return;
+        }
+        const moodWords = $("#clusterMoodInput").value.split(",").map(s=>s.trim()).filter(Boolean);
+        const nodeIds = [...ui.clusterSelection];
+        const clusterId = uid("cluster");
+        state.clusters.push({
+          id: clusterId,
+          projectId: state.currentProjectId,
+          title: name,
+          moodWords,
+          description: $("#clusterDescInput").value.trim(),
+          nodeIds,
+          status: "active",
+          createdAt: new Date().toISOString()
+        });
+        state.nodes.forEach(n => { if(nodeIds.includes(n.id)) n.clusterId = clusterId; });
+        ui.clusterSelection.clear();
+        ui.selectedClusterId = clusterId;
+        closeSheet();
+        setMode("idle");
+        toast("Cluster створено");
+      };
+    }
+
+    function openLockSheet(clusterId = null){
+      const clusters = currentClusters().filter(c=>c.status !== "archived");
+      if(!clusters.length){
+        toast("Спершу створи Cluster");
+        return;
+      }
+      if(!clusterId && clusters.length > 1){
+        showSheet(`
+          <h2 class="sheetTitle">Lock Vision</h2>
+          <p class="sheetText">Обери cluster, який стане зафіксованим баченням.</p>
+          ${clusters.map(c=>`<button class="optionBtn" data-lock-cluster="${c.id}" style="width:100%;margin-bottom:8px"><b>${escapeHtml(c.title)}</b><span>${c.nodeIds.length} nodes · ${(c.moodWords||[]).join(" · ")}</span></button>`).join("")}
+        `);
+        $$("[data-lock-cluster]").forEach(btn => btn.onclick = () => openLockSheet(btn.dataset.lockCluster));
+        return;
+      }
+      const cluster = currentClusters().find(c=>c.id === (clusterId || clusters[0].id));
+      if(!cluster) return;
+      showSheet(`
+        <h2 class="sheetTitle">Lock Vision</h2>
+        <p class="sheetText">Ти фіксуєш цей cluster як головне бачення проєкту. Альтернативи залишаться в Archive.</p>
+        <div class="emptyBlock" style="margin-bottom:12px">
+          <b style="color:var(--text)">${escapeHtml(cluster.title)}</b><br>
+          ${(cluster.moodWords||[]).map(escapeHtml).join(" · ")}<br><br>
+          ${escapeHtml(cluster.description || "Без опису")}
+        </div>
+        <button id="confirmLockBtn" class="primaryBtn" style="width:100%">Lock this Vision</button>
+        <button id="cancelLockBtn" class="ghostBtn" style="width:100%;margin-top:8px">Скасувати</button>
+      `);
+      $("#cancelLockBtn").onclick = closeSheet;
+      $("#confirmLockBtn").onclick = () => {
+        lockCluster(cluster.id);
+        closeSheet();
+        setMode("idle");
+        openPanel("vision");
+        toast("Vision зафіксовано");
+      };
+    }
+
+    function lockCluster(clusterId){
+      const cluster = state.clusters.find(c=>c.id===clusterId);
+      if(!cluster) return;
+      const nodeIds = new Set(cluster.nodeIds);
+      const nodes = currentNodes().filter(n=>nodeIds.has(n.id)).map(n=>({...n}));
+      const edges = currentEdges().filter(e=>nodeIds.has(e.sourceNodeId) && nodeIds.has(e.targetNodeId)).map(e=>({...e}));
+      const archived = currentClusters().filter(c=>c.id!==clusterId && c.status==="active").map(c=>c.id);
+
+      state.clusters.forEach(c => {
+        if(c.projectId !== state.currentProjectId) return;
+        c.status = c.id === clusterId ? "locked" : "archived";
+      });
+
+      state.lockedVisions = state.lockedVisions.filter(v=>v.projectId!==state.currentProjectId);
+      state.lockedVisions.push({
+        id: uid("vision"),
+        projectId: state.currentProjectId,
+        clusterId,
+        snapshot: {
+          cluster: {...cluster, status:"locked"},
+          nodes,
+          edges,
+          viewport: {...state.viewport}
+        },
+        archivedClusterIds: archived,
+        lockedAt: new Date().toISOString()
+      });
+      saveState();
+    }
+
+    function renderVisionPanel(){
+      const vision = state.lockedVisions.find(v=>v.projectId===state.currentProjectId);
+      if(!vision){
+        els.visionDescription.textContent = "Зафіксована карта з’явиться після Lock.";
+        els.visionContent.innerHTML = `<div class="emptyBlock">Спершу створи cluster на canvas і натисни Lock.</div>`;
+        return;
+      }
+      const lockedAt = new Date(vision.lockedAt).toLocaleDateString("uk-UA", {day:"2-digit", month:"short", year:"numeric"});
+      const cluster = vision.snapshot.cluster;
+      els.visionDescription.textContent = `${cluster.title} · Locked ${lockedAt}`;
+      els.visionContent.innerHTML = `
+        <div class="emptyBlock">
+          <b style="color:var(--text)">${escapeHtml(cluster.title)}</b><br>
+          ${(cluster.moodWords||[]).map(escapeHtml).join(" · ")}<br><br>
+          ${escapeHtml(cluster.description || "Без опису")}
+        </div>
+        <div id="visionMiniCanvas" class="visionCanvas"></div>
+        <button id="startMakingBtn" class="primaryBtn" style="width:100%;margin-bottom:10px">Start Making</button>
+      `;
+      $("#startMakingBtn").onclick = () => {
+        els.visionPanel.classList.remove("active");
+        openPanel("make");
+      };
+      renderMiniVision(vision, $("#visionMiniCanvas"));
+    }
+
+    function renderMiniVision(vision, container){
+      const nodes = vision.snapshot.nodes || [];
+      const edges = vision.snapshot.edges || [];
+      if(!nodes.length){
+        container.innerHTML = "";
+        return;
+      }
+      const minX = Math.min(...nodes.map(n=>n.x));
+      const minY = Math.min(...nodes.map(n=>n.y));
+      const maxX = Math.max(...nodes.map(n=>n.x + (n.type==="image"?116:120)));
+      const maxY = Math.max(...nodes.map(n=>n.y + (n.type==="image"?112:58)));
+      const w = maxX - minX + 80;
+      const h = maxY - minY + 80;
+      const scale = Math.min(container.clientWidth / w, container.clientHeight / h, 1.2);
+      const offsetX = (container.clientWidth - w*scale)/2 + 40*scale;
+      const offsetY = (container.clientHeight - h*scale)/2 + 40*scale;
+      const nodeMap = Object.fromEntries(nodes.map(n=>[n.id,n]));
+      const miniEdges = edges.map(e => {
+        const a = nodeMap[e.sourceNodeId], b = nodeMap[e.targetNodeId];
+        if(!a || !b) return "";
+        const ax = offsetX + (a.x - minX + 55) * scale;
+        const ay = offsetY + (a.y - minY + 24) * scale;
+        const bx = offsetX + (b.x - minX + 55) * scale;
+        const by = offsetY + (b.y - minY + 24) * scale;
+        return `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#8b8b8b" stroke-width="2" />`;
+      }).join("");
+      const miniNodes = nodes.map(n => {
+        const x = offsetX + (n.x - minX) * scale;
+        const y = offsetY + (n.y - minY) * scale;
+        const label = escapeHtml(n.title || n.content || "Node");
+        if(n.type === "image" && n.content){
+          return `<div style="position:absolute;left:${x}px;top:${y}px;width:${116*scale}px;border:1px solid #333;border-radius:${14*scale}px;background:#1f1f1f;padding:${5*scale}px;overflow:hidden">
+            <img src="${escapeAttr(n.content)}" style="width:100%;height:${70*scale}px;object-fit:cover;border-radius:${9*scale}px;display:block">
+          </div>`;
+        }
+        return `<div style="position:absolute;left:${x}px;top:${y}px;max-width:${140*scale}px;border:1px solid #333;border-radius:${14*scale}px;background:#1f1f1f;color:#f2f2f2;padding:${9*scale}px ${10*scale}px;font-size:${12*scale}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>`;
+      }).join("");
+      container.innerHTML = `<svg style="position:absolute;inset:0;width:100%;height:100%">${miniEdges}</svg>${miniNodes}`;
+    }
+
+    function renderMakePanel(){
+      const passes = state.workPasses.filter(p=>p.projectId===state.currentProjectId);
+      const reviews = state.reviewNotes.filter(r=>r.projectId===state.currentProjectId);
+      const tasks = state.tasks.filter(t=>t.projectId===state.currentProjectId);
+      els.makeContent.innerHTML = `
+        <h3 style="margin:18px 0 8px">Passes</h3>
+        ${passes.length ? passes.map(p=>`<div class="passItem"><b>${escapeHtml(p.title)}</b><br><span style="color:var(--muted);font-size:13px">${escapeHtml(p.note || "")}</span></div>`).join("") : `<div class="emptyBlock">Ще немає робочих проходів.</div>`}
+        <h3 style="margin:18px 0 8px">Review</h3>
+        ${reviews.length ? reviews.map(r=>`<div class="passItem"><b>${escapeHtml(r.title)}</b><br><span style="color:var(--muted);font-size:13px">${escapeHtml(r.note || "")}</span></div>`).join("") : `<div class="emptyBlock">Review-нотатки з’являться тут.</div>`}
+        <h3 style="margin:18px 0 8px">Tasks</h3>
+        ${tasks.length ? tasks.map(t=>`<button class="taskItem ${t.status==="done" ? "done" : ""}" data-task-toggle="${t.id}" style="width:100%;text-align:left;color:var(--text)">○ ${escapeHtml(t.title)}</button>`).join("") : `<div class="emptyBlock">Задачі створюються з review-нотаток.</div>`}
+      `;
+      $$("[data-task-toggle]").forEach(btn => btn.onclick = () => {
+        const t = state.tasks.find(x=>x.id===btn.dataset.taskToggle);
+        if(t) t.status = t.status === "done" ? "todo" : "done";
+        saveState();
+        renderMakePanel();
+      });
+    }
+
+    function openWorkPassSheet(type){
+      const isReview = type === "review";
+      showSheet(`
+        <h2 class="sheetTitle">${isReview ? "Review note" : "Create pass"}</h2>
+        <p class="sheetText">${isReview ? "Зафіксуй, що треба покращити." : "Зафіксуй прохід роботи без критики."}</p>
+        <div class="field">
+          <label class="label">Title</label>
+          <input id="workTitleInput" placeholder="${isReview ? "Композиція важка" : "Work pass #1"}" />
+        </div>
+        <div class="field">
+          <label class="label">Note</label>
+          <textarea id="workNoteInput" placeholder="Короткий опис..."></textarea>
+        </div>
+        ${isReview ? `<label class="row" style="margin:12px 0;color:var(--muted)"><input id="createTaskCheck" type="checkbox" style="width:auto"> Створити task з review</label>` : ""}
+        <button id="saveWorkBtn" class="primaryBtn" style="width:100%">Save</button>
+      `);
+      $("#saveWorkBtn").onclick = () => {
+        const title = $("#workTitleInput").value.trim();
+        const note = $("#workNoteInput").value.trim();
+        if(!title && !note){ toast("Додай текст"); return; }
+        if(isReview){
+          const id = uid("review");
+          state.reviewNotes.push({id, projectId:state.currentProjectId, title:title||"Review note", note, createdAt:new Date().toISOString()});
+          if($("#createTaskCheck")?.checked){
+            state.tasks.push({id:uid("task"), projectId:state.currentProjectId, title:title || note.slice(0,52), sourceReviewId:id, status:"todo", createdAt:new Date().toISOString()});
+          }
+        }else{
+          state.workPasses.push({id:uid("pass"), projectId:state.currentProjectId, title:title||"Work pass", note, createdAt:new Date().toISOString()});
+        }
+        closeSheet();
+        renderMakePanel();
+        saveState();
+      };
+    }
+
+    function createProjectSheet(){
+      showSheet(`
+        <h2 class="sheetTitle">Новий проєкт</h2>
+        <p class="sheetText">Один проєкт — один творчий canvas.</p>
+        <div class="field">
+          <label class="label">Назва</label>
+          <input id="projectNameInput" placeholder="Айдентика бренду" />
+        </div>
+        <div class="field">
+          <label class="label">Опис</label>
+          <textarea id="projectDescInput" placeholder="Коротко: що шукаємо або створюємо"></textarea>
+        </div>
+        <button id="createProjectBtn" class="primaryBtn" style="width:100%">Створити</button>
+      `);
+      $("#createProjectBtn").onclick = () => {
+        const title = $("#projectNameInput").value.trim();
+        if(!title){ toast("Додай назву"); return; }
+        const id = uid("project");
+        state.projects.push({id,title,description:$("#projectDescInput").value.trim(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+        state.currentProjectId = id;
+        closeSheet();
+        seedStarterNodes(id);
+        setScreen("canvas");
+        centerCanvas(false);
+        toast("Проєкт створено");
+      };
+    }
+
+    function seedStarterNodes(projectId){
+      const hasAny = state.nodes.some(n=>n.projectId===projectId);
+      if(hasAny) return;
+      const cx = 1180, cy = 1140;
+      const n1 = {id:uid("node"), projectId, type:"text", title:"Core idea", content:"Що це має відчувати?", x:cx, y:cy, clusterId:null, createdAt:new Date().toISOString()};
+      const n2 = {id:uid("node"), projectId, type:"quote", title:"Mood phrase", content:"Від хаосу до бачення", x:cx+10, y:cy+115, clusterId:null, createdAt:new Date().toISOString()};
+      const n3 = {id:uid("node"), projectId, type:"color", title:"#d8c7a1", content:"#d8c7a1", x:cx-135, y:cy+60, clusterId:null, createdAt:new Date().toISOString()};
+      state.nodes.push(n1,n2,n3);
+      state.edges.push({id:uid("edge"),projectId,sourceNodeId:n1.id,targetNodeId:n2.id,type:"leads",createdAt:new Date().toISOString()});
+    }
+
+    function centerCanvas(animate = true){
+      state.viewport.x = -760;
+      state.viewport.y = -780;
+      state.viewport.zoom = 0.82;
+      applyViewport();
+      saveState();
+    }
+
+    function zoomBy(delta){
+      const oldZoom = state.viewport.zoom;
+      const newZoom = Math.max(0.35, Math.min(1.7, oldZoom + delta));
+      const rect = els.canvasViewport.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const canvasX = (cx - state.viewport.x) / oldZoom;
+      const canvasY = (cy - state.viewport.y) / oldZoom;
+      state.viewport.zoom = newZoom;
+      state.viewport.x = cx - canvasX * newZoom;
+      state.viewport.y = cy - canvasY * newZoom;
+      renderAll();
+    }
+
+    function openMenuSheet(){
+      const p = currentProject();
+      showSheet(`
+        <h2 class="sheetTitle">Project menu</h2>
+        <p class="sheetText">${escapeHtml(p?.title || "")}</p>
+        <button id="exportBtn" class="secondaryBtn" style="width:100%;margin-bottom:10px">Export JSON</button>
+        <button id="resetDemoBtn" class="secondaryBtn dangerBtn" style="width:100%">Clear local data</button>
+      `);
+      $("#exportBtn").onclick = () => {
+        const data = JSON.stringify(state, null, 2);
+        const blob = new Blob([data], {type:"application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "creative-flow-data.json";
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+      $("#resetDemoBtn").onclick = () => {
+        if(confirm("Очистити локальні дані?")){
+          localStorage.removeItem(STORAGE_KEY);
+          state = structuredClone(defaultState);
+          closeSheet();
+          setScreen("projects");
+        }
+      };
+    }
+
+    function escapeHtml(str=""){
+      return String(str).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
+    function escapeAttr(str=""){ return escapeHtml(str).replace(/`/g,"&#96;"); }
+
+    // Canvas pan / pinch
+    els.canvasViewport.addEventListener("pointerdown", (e)=>{
+      if(e.target.closest(".node") || e.target.closest(".clusterBox")) return;
+      ui.selectedNodeId = null;
+      ui.selectedClusterId = null;
+      if(ui.mode !== "idle") return;
+      ui.pan = {active:true,startX:e.clientX,startY:e.clientY,baseX:state.viewport.x,baseY:state.viewport.y};
+      els.canvasViewport.setPointerCapture(e.pointerId);
+      renderAll();
+    });
+
+    els.canvasViewport.addEventListener("pointermove", (e)=>{
+      if(ui.pan.active){
+        state.viewport.x = ui.pan.baseX + (e.clientX - ui.pan.startX);
+        state.viewport.y = ui.pan.baseY + (e.clientY - ui.pan.startY);
+        applyViewport();
+      }
+      onNodePointerMove(e);
+    });
+
+    els.canvasViewport.addEventListener("pointerup", (e)=>{
+      ui.pan.active = false;
+      onNodePointerUp(e);
+      saveState();
+    });
+
+    els.canvasViewport.addEventListener("pointercancel", ()=>{
+      ui.pan.active = false;
+      ui.drag.active = false;
+    });
+
+    els.canvasViewport.addEventListener("wheel", (e)=>{
+      e.preventDefault();
+      zoomBy(e.deltaY > 0 ? -0.06 : 0.06);
+    }, {passive:false});
+
+    // Lightweight touch pinch
+    let touchCache = [];
+    els.canvasViewport.addEventListener("touchstart", (e)=>{
+      touchCache = Array.from(e.touches);
+      if(touchCache.length === 2){
+        const d = distance(touchCache[0], touchCache[1]);
+        ui.pinch = {active:true,startDistance:d,startZoom:state.viewport.zoom,baseX:state.viewport.x,baseY:state.viewport.y};
+      }
+    }, {passive:false});
+
+    els.canvasViewport.addEventListener("touchmove", (e)=>{
+      if(e.touches.length === 2 && ui.pinch.active){
+        e.preventDefault();
+        const touches = Array.from(e.touches);
+        const d = distance(touches[0], touches[1]);
+        const ratio = d / ui.pinch.startDistance;
+        state.viewport.zoom = Math.max(0.35, Math.min(1.7, ui.pinch.startZoom * ratio));
+        applyViewport();
+      }
+    }, {passive:false});
+
+    els.canvasViewport.addEventListener("touchend", ()=>{ ui.pinch.active = false; saveState(); });
+
+    function distance(a,b){
+      return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    }
+
+    // Events
+    els.newProjectBtn.onclick = createProjectSheet;
+    els.backToProjectsBtn.onclick = () => setScreen("projects");
+    els.overlay.onclick = closeSheet;
+    els.centerBtn.onclick = () => centerCanvas();
+    els.visionBtn.onclick = () => openPanel("vision");
+    els.makeBtn.onclick = () => openPanel("make");
+    els.closeVisionBtn.onclick = closePanels;
+    els.closeMakeBtn.onclick = closePanels;
+    els.addPassBtn.onclick = () => openWorkPassSheet("pass");
+    els.addReviewBtn.onclick = () => openWorkPassSheet("review");
+    els.menuBtn.onclick = openMenuSheet;
+
+    $$(".dockBtn").forEach(btn => {
+      btn.onclick = () => {
+        const action = btn.dataset.action;
+        if(action === "add"){ openAddSheet(); return; }
+        if(action === "link"){ setMode(ui.mode === "link" ? "idle" : "link"); return; }
+        if(action === "cluster"){ setMode(ui.mode === "cluster" ? "idle" : "cluster"); return; }
+        if(action === "lock"){ setMode("lock"); openLockSheet(ui.selectedClusterId); return; }
+      };
+    });
+
+    // Boot
+    if(!state.projects.length){
+      const id = uid("project");
+      state.projects.push({
+        id,
+        title:"Brand Identity",
+        description:"Перший canvas для тесту Creative Flow",
+        createdAt:new Date().toISOString(),
+        updatedAt:new Date().toISOString()
+      });
+      state.currentProjectId = id;
+      seedStarterNodes(id);
+      saveState();
+    }
+    renderAll();
+
+    // Open the first project directly on mobile after initial boot? Keep projects as landing.
+  </script>
+</body>
+</html>
